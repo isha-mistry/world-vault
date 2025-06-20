@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import {
   AlertDialog,
@@ -11,112 +11,195 @@ import {
   AlertDialogFooter,
   Button
 } from '@worldcoin/mini-apps-ui-kit-react';
-import { MiniKit, Tokens, tokenToDecimals } from '@worldcoin/minikit-js';
+import { MiniKit } from '@worldcoin/minikit-js';
+import { useWaitForTransactionReceipt } from '@worldcoin/minikit-react';
+import { createPublicClient, http } from 'viem';
 import {
   ArrowDown,
   Wallet,
   GraphUp,
   StatsUpSquare,
   CheckCircle,
-  WarningTriangle
+  WarningTriangle,
+  Refresh,
+  Clock
 } from 'iconoir-react';
 import { useTheme } from '@/providers/Theme';
+import {
+  CONTRACT_ADDRESSES,
+  VAULT_MANAGER_ABI
+} from '../constants/contracts';
+import { formatBigInt, formatTimestamp, formatCurrency } from '../../utils/format';
 
-interface VaultInfo {
-  depositedAmount: number;
-  currentValue: number;
-  profit: number;
+// World Chain Mainnet configuration  
+const worldChainMainnet = {
+  id: 480,
+  name: 'World Chain',
+  network: 'worldchain',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Ether',
+    symbol: 'ETH',
+  },
+  rpcUrls: {
+    public: { http: ['https://worldchain-mainnet.g.alchemy.com/public'] },
+    default: { http: ['https://worldchain-mainnet.g.alchemy.com/public'] },
+  },
+  blockExplorers: {
+    default: { name: 'World Chain Explorer', url: 'https://worldscan.org/' },
+  },
+  testnet: false,
+};
+
+interface DepositInfo {
+  id: number;
+  depositedAmount: bigint;
+  withdrawableAmount: bigint;
+  timestamp: bigint;
+  profit: bigint;
   profitPercentage: number;
-  lastUpdated: string;
 }
 
 export const WithdrawButton = () => {
   const { data: session } = useSession();
   const { isLoaded } = useTheme();
-  const [vaultInfo, setVaultInfo] = useState<VaultInfo | null>(null);
+  const [deposits, setDeposits] = useState<DepositInfo[]>([]);
+  const [selectedDeposit, setSelectedDeposit] = useState<DepositInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string>('');
+  const [transactionId, setTransactionId] = useState<string>('');
 
+  // Setup viem client for World Chain
+  const client = createPublicClient({
+    chain: worldChainMainnet,
+    transport: http('https://worldchain-mainnet.g.alchemy.com/public'),
+  });
+
+  // Monitor transaction status
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
+    client: client,
+    appConfig: {
+      app_id: process.env.NEXT_PUBLIC_APP_ID || '',
+    },
+    transactionId: transactionId,
+  });
+
+  // Initialize wallet address
   useEffect(() => {
-    if (isWithdrawDialogOpen) {
-      fetchVaultInfo();
+    if (session?.user?.id) {
+      setWalletAddress(session.user.id);
     }
-  }, [isWithdrawDialogOpen]);
+  }, [session?.user?.id]);
 
-  const fetchVaultInfo = async () => {
+  // Fetch deposits when dialog opens
+  useEffect(() => {
+    if (isWithdrawDialogOpen && walletAddress) {
+      fetchUserDeposits();
+    }
+  }, [isWithdrawDialogOpen, walletAddress]);
+
+  // Handle transaction confirmation
+  useEffect(() => {
+    if (isConfirmed && selectedDeposit) {
+      fetchUserDeposits(); // Refresh deposits
+      setTransactionId('');
+      setSelectedDeposit(null);
+      setIsWithdrawDialogOpen(false);
+    }
+  }, [isConfirmed, selectedDeposit]);
+
+  const fetchUserDeposits = async () => {
+    if (!walletAddress) return;
+
     setIsLoading(true);
     setError(null);
+
     try {
-      console.log('Fetching vault info...');
-      const res = await fetch('/api/withdraw', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      console.log('Fetching user deposits...');
+
+      // Get user's active deposits from contract
+      const depositsResult = await client.readContract({
+        address: CONTRACT_ADDRESSES.VAULT_MANAGER as `0x${string}`,
+        abi: VAULT_MANAGER_ABI,
+        functionName: 'getUserActiveDeposits',
+        args: [walletAddress as `0x${string}`],
       });
 
-      console.log('Response status:', res.status);
+      const [depositIds, depositedAmounts, withdrawableAmounts, timestamps] = depositsResult as [bigint[], bigint[], bigint[], bigint[]];
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
-      }
+      const fetchedDeposits: DepositInfo[] = depositIds.map((id, index) => {
+        const depositedAmount = depositedAmounts[index];
+        const withdrawableAmount = withdrawableAmounts[index];
+        const profit = withdrawableAmount - depositedAmount;
+        const profitPercentage = depositedAmount > BigInt(0)
+          ? Number(profit * BigInt(10000) / depositedAmount) / 100
+          : 0;
 
-      const data = await res.json();
-      console.log('Vault data received:', data);
-      setVaultInfo(data);
-    } catch (error) {
-      console.error('Error fetching vault info:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load vault information');
+        return {
+          id: Number(id),
+          depositedAmount,
+          withdrawableAmount,
+          timestamp: timestamps[index],
+          profit,
+          profitPercentage,
+        };
+      });
+
+      setDeposits(fetchedDeposits);
+      console.log('Fetched deposits:', fetchedDeposits);
+    } catch (err) {
+      console.error('Error fetching user deposits:', err);
+      setError('Failed to load deposit information. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleWithdraw = async () => {
-    if (!session?.user?.id || !vaultInfo) return;
+  const handleWithdraw = useCallback(async (deposit: DepositInfo) => {
+    if (!walletAddress || !deposit) return;
 
     setIsWithdrawing(true);
+    setSelectedDeposit(deposit);
 
     try {
-      const res = await fetch('/api/withdraw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: vaultInfo.currentValue
-        })
-      });
+      console.log('Starting withdrawal process for deposit:', deposit.id);
 
-      if (!res.ok) {
-        throw new Error('Failed to initiate withdrawal');
-      }
-
-      const { id } = await res.json();
-
-      const result = await MiniKit.commandsAsync.pay({
-        reference: id,
-        to: session.user.id,
-        tokens: [
+      // Send transaction using MiniKit
+      const { commandPayload, finalPayload } = await MiniKit.commandsAsync.sendTransaction({
+        transaction: [
           {
-            symbol: Tokens.WLD,
-            token_amount: tokenToDecimals(vaultInfo.currentValue, Tokens.WLD).toString(),
-          }
+            address: CONTRACT_ADDRESSES.VAULT_MANAGER,
+            abi: VAULT_MANAGER_ABI,
+            functionName: 'withdraw',
+            args: [deposit.id.toString()],
+          },
         ],
-        description: `Withdraw ${vaultInfo.currentValue} WLD`,
       });
 
-      if (result.finalPayload.status === 'success') {
-        setIsWithdrawDialogOpen(false);
-        // You can add a success callback here if needed
+      if (finalPayload.status === 'error') {
+        console.error('Error sending withdrawal transaction:', finalPayload);
+        setError('Failed to send withdrawal transaction');
+        setSelectedDeposit(null);
+      } else {
+        console.log('Withdrawal transaction sent:', finalPayload.transaction_id);
+        setTransactionId(finalPayload.transaction_id);
       }
-    } catch (error) {
-      console.error('Withdrawal error:', error);
+
+    } catch (err: any) {
+      console.error('Error withdrawing tokens:', err);
+      if (err.message?.includes('user_rejected') || err.message?.includes('cancelled')) {
+        setError('Transaction was cancelled by user');
+      } else {
+        setError(`Failed to withdraw tokens: ${err.message}`);
+      }
+      setSelectedDeposit(null);
     } finally {
       setIsWithdrawing(false);
     }
-  };
+  }, [walletAddress, session?.user?.id, session?.user?.username]);
 
   // Prevent rendering until theme is loaded to avoid blinking
   if (!isLoaded) {
@@ -167,7 +250,7 @@ export const WithdrawButton = () => {
             {isLoading ? (
               <div className="py-8 text-center">
                 <div className="inline-block w-6 h-6 border-2 rounded-full border-solid border-gray-300 border-t-red-500 animate-spin mb-4"></div>
-                <p className="text-gray-600">Loading vault information...</p>
+                <p className="text-gray-600">Loading your deposits...</p>
               </div>
             ) : error ? (
               <div className="py-6 text-center space-y-4">
@@ -178,7 +261,7 @@ export const WithdrawButton = () => {
                   {error}
                 </div>
                 <Button
-                  onClick={fetchVaultInfo}
+                  onClick={fetchUserDeposits}
                   variant="secondary"
                   size="sm"
                   className="mx-auto"
@@ -186,59 +269,116 @@ export const WithdrawButton = () => {
                   Try Again
                 </Button>
               </div>
-            ) : vaultInfo ? (
-              <div className="space-y-6 py-4">
-                {/* Vault Summary Card */}
-                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-5 border border-gray-200 shadow-sm">
-                  <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            ) : transactionId && (isConfirming || isConfirmed) ? (
+              <div className="py-8 text-center space-y-4">
+                {isConfirming && (
+                  <>
+                    <div className="inline-block w-8 h-8 border-2 rounded-full border-solid border-gray-300 border-t-red-500 animate-spin mb-4"></div>
+                    <div>
+                      <p className="font-medium text-red-500">Processing Withdrawal...</p>
+                      <p className="text-sm text-gray-600">Please wait while we process your withdrawal</p>
+                    </div>
+                  </>
+                )}
+                {isConfirmed && (
+                  <>
+                    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-green-500">Withdrawal Successful!</p>
+                      <p className="text-sm text-gray-600">Your funds have been withdrawn to your wallet</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : deposits.length > 0 ? (
+              <div className="space-y-4 py-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-semibold text-gray-900 flex items-center gap-2">
                     <Wallet className="w-5 h-5 text-blue-600" />
-                    Withdrawal Summary
+                    Your Active Deposits ({deposits.length})
                   </h4>
-
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="text-center p-3 bg-white rounded-lg border border-gray-100">
-                      <div className="flex justify-center mb-2">
-                        <Wallet className="w-5 h-5 text-blue-600" />
-                      </div>
-                      <p className="text-xl font-bold text-gray-900">{vaultInfo.depositedAmount}</p>
-                      <p className="text-xs text-gray-500">Deposited</p>
-                    </div>
-
-                    <div className="text-center p-3 bg-white rounded-lg border border-gray-100">
-                      <div className="flex justify-center mb-2">
-                        <GraphUp className="w-5 h-5 text-green-600" />
-                      </div>
-                      <p className="text-xl font-bold text-gray-900">{vaultInfo.currentValue}</p>
-                      <p className="text-xs text-gray-500">Current Value</p>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-200 pt-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <StatsUpSquare className={`w-5 h-5 ${vaultInfo.profit >= 0 ? 'text-green-600' : 'text-red-500'}`} />
-                        <span className="text-gray-600">Total Profit/Loss:</span>
-                      </div>
-                      <div className="text-right">
-                        <p className={`text-lg font-bold ${vaultInfo.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                          {vaultInfo.profit >= 0 ? '+' : ''}{vaultInfo.profit.toFixed(2)} WLD
-                        </p>
-                        <p className={`text-sm ${vaultInfo.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                          ({vaultInfo.profitPercentage >= 0 ? '+' : ''}{vaultInfo.profitPercentage.toFixed(2)}%)
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <button
+                    onClick={fetchUserDeposits}
+                    disabled={isLoading}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <Refresh className="w-4 h-4" />
+                  </button>
                 </div>
 
-                {/* Withdrawal Amount Highlight */}
-                <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-xl p-4 border border-blue-200 border-opacity-30">
-                  <div className="text-center">
-                    <p className="text-sm text-gray-600 mb-1">You will receive</p>
-                    <p className="text-3xl font-bold text-gray-900">{vaultInfo.currentValue} WLD</p>
-                    <p className="text-sm text-gray-600">in your wallet</p>
-                  </div>
+                {/* Deposits List */}
+                <div className="space-y-3 max-h-80 overflow-y-auto">
+                  {deposits.map((deposit) => (
+                    <div key={deposit.id} className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-sm font-medium text-gray-900">Deposit #{deposit.id}</span>
+                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <Clock className="w-3 h-3" />
+                              {formatTimestamp(Number(deposit.timestamp))}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <p className="text-gray-500">Deposited</p>
+                              <p className="font-semibold text-gray-900">{formatCurrency(deposit.depositedAmount)}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500">Withdrawable</p>
+                              <p className="font-semibold text-gray-900">{formatCurrency(deposit.withdrawableAmount)}</p>
+                            </div>
+                          </div>
+
+                          {/* Profit/Loss Display */}
+                          <div className="mt-2 flex items-center gap-2">
+                            <StatsUpSquare className={`w-4 h-4 ${deposit.profit >= BigInt(0) ? 'text-green-600' : 'text-red-500'}`} />
+                            <span className={`text-sm font-medium ${deposit.profit >= BigInt(0) ? 'text-green-600' : 'text-red-500'}`}>
+                              {deposit.profit >= BigInt(0) ? '+' : ''}{formatBigInt(deposit.profit)} WLD
+                              ({deposit.profitPercentage >= 0 ? '+' : ''}{deposit.profitPercentage.toFixed(2)}%)
+                            </span>
+                          </div>
+                        </div>
+
+                        <Button
+                          onClick={() => handleWithdraw(deposit)}
+                          disabled={isWithdrawing || deposit.withdrawableAmount === BigInt(0)}
+                          variant="primary"
+                          size="sm"
+                          className="ml-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 text-sm"
+                        >
+                          {isWithdrawing && selectedDeposit?.id === deposit.id ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
+                              Withdrawing...
+                            </div>
+                          ) : (
+                            <>
+                              <ArrowDown className="w-4 h-4 mr-1" />
+                              Withdraw
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
+
+                {/* Summary Card */}
+                {deposits.length > 0 && (
+                  <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-xl p-4 border border-blue-200 border-opacity-30 mt-4">
+                    <div className="text-center">
+                      <p className="text-sm text-gray-600 mb-1">Total Available to Withdraw</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {formatCurrency(deposits.reduce((sum, deposit) => sum + deposit.withdrawableAmount, BigInt(0)))}
+                      </p>
+                      <p className="text-sm text-gray-600">across {deposits.length} active deposit{deposits.length !== 1 ? 's' : ''}</p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Warning Message */}
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -246,51 +386,23 @@ export const WithdrawButton = () => {
                     <WarningTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
                     <div className="text-sm text-yellow-800">
                       <p className="font-medium mb-1">Important Notice</p>
-                      <p>This withdrawal will close your investment position. You won't be able to earn additional returns after completing this action.</p>
+                      <p>Withdrawing from a deposit will close that specific position permanently. You can withdraw from individual deposits or all at once.</p>
                     </div>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="py-6 text-center text-gray-500">
-                No vault information available. Please try again.
+              <div className="py-8 text-center text-gray-500 space-y-4">
+                <div className="flex justify-center">
+                  <Wallet className="w-12 h-12 text-gray-300" />
+                </div>
+                <div>
+                  <p className="font-medium text-gray-600">No Active Deposits</p>
+                  <p className="text-sm text-gray-500">You don't have any active deposits to withdraw from.</p>
+                </div>
               </div>
             )}
           </div>
-
-          <AlertDialogFooter>
-            <div className="flex gap-3 pt-4 flex-shrink-0">
-              <Button
-                variant="tertiary"
-                onClick={() => setIsWithdrawDialogOpen(false)}
-                disabled={isWithdrawing}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-
-              <Button
-                onClick={handleWithdraw}
-                disabled={isWithdrawing || !vaultInfo}
-                variant="primary"
-                className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
-              >
-                {isWithdrawing ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 rounded-full border-solid border-white border-t-transparent animate-spin"></div>
-                    Processing...
-                  </div>
-                ) : vaultInfo ? (
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4" />
-                    Confirm Withdrawal
-                  </div>
-                ) : (
-                  'Loading...'
-                )}
-              </Button>
-            </div>
-          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
