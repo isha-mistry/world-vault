@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { MiniKit, Tokens } from "@worldcoin/minikit-js";
 
 export async function POST(req: NextRequest) {
   try {

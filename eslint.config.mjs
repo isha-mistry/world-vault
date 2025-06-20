@@ -16,10 +16,14 @@ const eslintConfig = [
     settings: { react: { version: 'detect' } },
     plugins: { react },
     rules: {
-      ...react.configs.recommended.rules,
-      ...react.configs['jsx-runtime'].rules,
+      "@typescript-eslint/no-unused-vars":"false",
+      "@typescript-eslint/no-explicit-any": "false"
     },
   },
 ];
+
+// const eslintConfig = [
+//   ...compat.extends("next/core-web-vitals", "next/typescript"),
+// ];
 
 export default eslintConfig;

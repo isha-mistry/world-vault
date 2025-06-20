@@ -1,27 +1,70 @@
-import { auth } from '@/auth';
+'use client';
+
+import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { Page } from '@/components/PageLayout';
 import { VaultDetails } from '@/components/VaultDetails';
 import { DepositComponent } from '@/components/DepositComponent';
-import WithdrawButton from '@/components/WithdrawButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CustomTopBar } from '@/components/CustomTopBar';
-import { Navigation } from '@/components/Navigation';
-import { Marble, TopBar } from '@worldcoin/mini-apps-ui-kit-react';
+import { WithdrawButton } from '@/components/WithdrawButton';
+import { truncateAddress } from '@/utils/format';
 
-export default async function Home() {
-  const session = await auth();
+// User display component with copy functionality
+function UserDisplay() {
+  const { data: session } = useSession();
+  const [copied, setCopied] = useState(false);
 
+  const displayValue = session?.user.username || session?.user.id;
+  const isWalletAddress = !session?.user.username && session?.user.id;
+  const truncatedValue = isWalletAddress ? truncateAddress(session?.user.id || '') : displayValue;
+
+  const handleCopy = async () => {
+    if (!displayValue) return;
+
+    try {
+      await navigator.clipboard.writeText(displayValue);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  if (!session?.user) return null;
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-1 bg-[var(--agent-bg)] rounded-full border border-[var(--border)]">
+      <span className="text-sm font-semibold text-[var(--foreground)] capitalize">
+        {truncatedValue}
+      </span>
+      <button
+        onClick={handleCopy}
+        className="p-1 hover:bg-[var(--accent)] rounded transition-colors duration-200 flex items-center justify-center"
+        title={copied ? 'Copied!' : 'Copy to clipboard'}
+      >
+        {copied ? (
+          <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        ) : (
+          <svg className="w-4 h-4 text-[var(--muted-foreground)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        )}
+      </button>
+    </div>
+  );
+}
+
+export default function Home() {
   return (
     <>
       <Page.Header className="p-0 bg-[var(--topbar-bg)]">
         <CustomTopBar
           endAdornment={
             <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-3 px-3 sm:px-4 py-2 bg-[var(--agent-bg)] rounded-full border border-[var(--border)]">
-                <span className="text-sm font-semibold text-[var(--foreground)] capitalize">
-                  {session?.user.username}
-                </span>
-              </div>
+              <UserDisplay />
 
               <div className="flex items-center">
                 <ThemeToggle />
