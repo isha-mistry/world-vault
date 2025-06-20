@@ -1,26 +1,15 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { InfoCircleSolid, Wallet, ArrowLeft, WarningTriangle } from 'iconoir-react'
+import React, { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import {
   AlertDialog,
   AlertDialogContent,
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-  AlertDialogDescription,
-  AlertDialogFooter,
   Button
-} from '@worldcoin/mini-apps-ui-kit-react';
-import { MiniKit, Tokens, tokenToDecimals } from '@worldcoin/minikit-js';
-import {
-  ArrowDown,
-  Wallet,
-  GraphUp,
-  StatsUpSquare,
-  CheckCircle,
-  WarningTriangle
-} from 'iconoir-react';
-import { useTheme } from '@/providers/Theme';
+} from '@worldcoin/mini-apps-ui-kit-react'
 
 interface VaultInfo {
   depositedAmount: number;
@@ -30,55 +19,48 @@ interface VaultInfo {
   lastUpdated: string;
 }
 
-export const WithdrawButton = () => {
+function WithdrawButton() {
   const { data: session } = useSession();
-  const { isLoaded } = useTheme();
   const [vaultInfo, setVaultInfo] = useState<VaultInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
-  const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isWithdrawDialogOpen) {
-      fetchVaultInfo();
-    }
-  }, [isWithdrawDialogOpen]);
+  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [statusMessage, setStatusMessage] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
 
   const fetchVaultInfo = async () => {
+    if (!session?.user?.id) return;
+
     setIsLoading(true);
-    setError(null);
     try {
-      console.log('Fetching vault info...');
-      const res = await fetch('/api/withdraw', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      console.log('Response status:', res.status);
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      const res = await fetch('/api/withdraw');
+      if (res.ok) {
+        const data = await res.json();
+        console.log(data);
+        setVaultInfo(data);
+      } else {
+        throw new Error('Failed to fetch vault info');
       }
-
-      const data = await res.json();
-      console.log('Vault data received:', data);
-      setVaultInfo(data);
     } catch (error) {
       console.error('Error fetching vault info:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load vault information');
+      setStatus('error');
+      setStatusMessage('Failed to load vault information');
     } finally {
       setIsLoading(false);
     }
   };
 
+  useEffect(() => {
+    if (isOpen) {
+      fetchVaultInfo();
+    }
+  }, [isOpen, session?.user?.id]);
+
   const handleWithdraw = async () => {
-    if (!session?.user?.id || !vaultInfo) return;
+    if (!vaultInfo || !session?.user?.id) return;
 
     setIsWithdrawing(true);
+    setStatus('idle');
 
     try {
       const res = await fetch('/api/withdraw', {
@@ -89,210 +71,154 @@ export const WithdrawButton = () => {
         })
       });
 
-      if (!res.ok) {
-        throw new Error('Failed to initiate withdrawal');
-      }
+      if (res.ok) {
+        const result = await res.json();
+        setStatus('success');
+        setStatusMessage(`Withdrawal of ${vaultInfo.currentValue} WLD initiated successfully! Transaction ID: ${result.id}`);
 
-      const { id } = await res.json();
-
-      const result = await MiniKit.commandsAsync.pay({
-        reference: id,
-        to: session.user.id,
-        tokens: [
-          {
-            symbol: Tokens.WLD,
-            token_amount: tokenToDecimals(vaultInfo.currentValue, Tokens.WLD).toString(),
-          }
-        ],
-        description: `Withdraw ${vaultInfo.currentValue} WLD`,
-      });
-
-      if (result.finalPayload.status === 'success') {
-        setIsWithdrawDialogOpen(false);
-        // You can add a success callback here if needed
+        // Reset vault info after successful withdrawal
+        setTimeout(() => {
+          setVaultInfo(null);
+          setStatus('idle');
+        }, 3000);
+      } else {
+        throw new Error('Withdrawal failed');
       }
     } catch (error) {
       console.error('Withdrawal error:', error);
+      setStatus('error');
+      setStatusMessage('Failed to process withdrawal. Please try again.');
     } finally {
       setIsWithdrawing(false);
     }
   };
 
-  // Prevent rendering until theme is loaded to avoid blinking
-  if (!isLoaded) {
-    return (
-      <div className="w-full max-w-md mx-auto px-2 sm:px-0">
-        <div className="w-full py-4 px-6 bg-gray-200 animate-pulse rounded-xl h-16"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="w-full max-w-md mx-auto px-2 sm:px-0 transition-none">
-      <AlertDialog open={isWithdrawDialogOpen} onOpenChange={setIsWithdrawDialogOpen}>
-        <AlertDialogTrigger asChild>
-          <Button
-            variant="secondary"
-            size="lg"
-            className="w-full py-4 px-6 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center gap-3 border-0"
-          >
-            <ArrowDown className="w-5 h-5" />
-            <span>Withdraw Funds</span>
-          </Button>
-        </AlertDialogTrigger>
-
-        <AlertDialogContent className="max-w-md mx-auto bg-white border border-gray-200 rounded-2xl shadow-2xl backdrop-blur-xl flex flex-col">
+    <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
+      <AlertDialogTrigger asChild>
+        <button className="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 bg-gradient-to-r from-[var(--primary)] to-[var(--primary-hover)] text-white font-semibold shadow-[var(--shadow-md)] hover:shadow-[var(--shadow-lg)] transform hover:scale-105 transition-all duration-200">
+          <ArrowLeft className="w-5 h-5" />
+          Withdraw
+        </button>
+      </AlertDialogTrigger>
+      <AlertDialogContent className="bg-[var(--card)] border-[var(--border)] rounded-2xl w-full">
+        <article className="text-[var(--foreground)]">
           <AlertDialogHeader>
-            <div className="text-center space-y-4 pb-4 flex-shrink-0">
-              <div className="flex justify-center">
-                <div className="relative">
-                  <div className="p-4 rounded-full bg-gradient-to-br from-red-500 to-red-600 shadow-lg">
-                    <ArrowDown className="w-8 h-8 text-white" />
-                  </div>
-                  <div className="absolute -inset-1 bg-gradient-to-br from-red-500 to-red-600 rounded-full blur opacity-20"></div>
-                </div>
-              </div>
-
-              <AlertDialogTitle className="text-2xl font-bold text-gray-900">
-                Withdraw Funds
-              </AlertDialogTitle>
-
-              <AlertDialogDescription className="text-gray-600 leading-relaxed">
-                You're about to withdraw all your funds from the Worldcoin Vault. This action will close your investment position.
-              </AlertDialogDescription>
-            </div>
+            <AlertDialogTitle className="flex items-center justify-center gap-3 text-xl font-bold">
+              {/* <span className="p-2 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-hover)]"> */}
+              <Wallet className="w-6 h-6 text-[var(--primary)]" />
+              {/* </span> */}
+              Withdraw Funds
+            </AlertDialogTitle>
           </AlertDialogHeader>
 
-          <div className="flex-1 overflow-y-auto px-1">
+          <main className="space-y-4 mt-4">
+            {/* User Profile Section */}
+            <section className="p-4 bg-[var(--agent-bg)] rounded-lg">
+              <h4 className="font-semibold text-[var(--foreground)] mb-2 flex items-center gap-2">
+                <InfoCircleSolid className="w-4 h-4" />
+                Account Information
+              </h4>
+              <ul className="space-y-1 text-sm list-none">
+                <li><span className="font-medium">Username:</span> {session?.user?.username || 'Not available'}</li>
+                <li><span className="font-medium">User ID:</span> {session?.user?.id ? `${session.user.id.slice(0, 4)}...${session.user.id.slice(-4)}` : 'Not available'}</li>
+              </ul>
+            </section>
+
+            {/* Vault Information Section */}
             {isLoading ? (
-              <div className="py-8 text-center">
-                <div className="inline-block w-6 h-6 border-2 rounded-full border-solid border-gray-300 border-t-red-500 animate-spin mb-4"></div>
-                <p className="text-gray-600">Loading vault information...</p>
-              </div>
-            ) : error ? (
-              <div className="py-6 text-center space-y-4">
-                <div className="flex justify-center">
-                  <WarningTriangle className="w-12 h-12 text-red-500" />
-                </div>
-                <div className="text-red-600 font-medium">
-                  {error}
-                </div>
-                <Button
-                  onClick={fetchVaultInfo}
-                  variant="secondary"
-                  size="sm"
-                  className="mx-auto"
-                >
-                  Try Again
-                </Button>
-              </div>
+              <section className="p-4 bg-[var(--agent-bg)] rounded-lg">
+                <article className="animate-pulse space-y-3">
+                  <span className="block h-4 bg-[var(--border)] rounded w-1/2"></span>
+                  <span className="block h-4 bg-[var(--border)] rounded w-3/4"></span>
+                  <span className="block h-4 bg-[var(--border)] rounded w-1/3"></span>
+                </article>
+              </section>
             ) : vaultInfo ? (
-              <div className="space-y-6 py-4">
-                {/* Vault Summary Card */}
-                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-5 border border-gray-200 shadow-sm">
-                  <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Wallet className="w-5 h-5 text-blue-600" />
-                    Withdrawal Summary
-                  </h4>
-
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="text-center p-3 bg-white rounded-lg border border-gray-100">
-                      <div className="flex justify-center mb-2">
-                        <Wallet className="w-5 h-5 text-blue-600" />
-                      </div>
-                      <p className="text-xl font-bold text-gray-900">{vaultInfo.depositedAmount}</p>
-                      <p className="text-xs text-gray-500">Deposited</p>
-                    </div>
-
-                    <div className="text-center p-3 bg-white rounded-lg border border-gray-100">
-                      <div className="flex justify-center mb-2">
-                        <GraphUp className="w-5 h-5 text-green-600" />
-                      </div>
-                      <p className="text-xl font-bold text-gray-900">{vaultInfo.currentValue}</p>
-                      <p className="text-xs text-gray-500">Current Value</p>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-200 pt-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <StatsUpSquare className={`w-5 h-5 ${vaultInfo.profit >= 0 ? 'text-green-600' : 'text-red-500'}`} />
-                        <span className="text-gray-600">Total Profit/Loss:</span>
-                      </div>
-                      <div className="text-right">
-                        <p className={`text-lg font-bold ${vaultInfo.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                          {vaultInfo.profit >= 0 ? '+' : ''}{vaultInfo.profit.toFixed(2)} WLD
-                        </p>
-                        <p className={`text-sm ${vaultInfo.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                          ({vaultInfo.profitPercentage >= 0 ? '+' : ''}{vaultInfo.profitPercentage.toFixed(2)}%)
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Withdrawal Amount Highlight */}
-                <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-xl p-4 border border-blue-200 border-opacity-30">
-                  <div className="text-center">
-                    <p className="text-sm text-gray-600 mb-1">You will receive</p>
-                    <p className="text-3xl font-bold text-gray-900">{vaultInfo.currentValue} WLD</p>
-                    <p className="text-sm text-gray-600">in your wallet</p>
-                  </div>
-                </div>
-
-                {/* Warning Message */}
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <WarningTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                    <div className="text-sm text-yellow-800">
-                      <p className="font-medium mb-1">Important Notice</p>
-                      <p>This withdrawal will close your investment position. You won't be able to earn additional returns after completing this action.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <section className="p-4 bg-[var(--agent-bg)] rounded-lg">
+                <h4 className="font-semibold text-[var(--foreground)] mb-3">Vault Details</h4>
+                <section className="grid grid-cols-2 gap-3 text-sm">
+                  <article className="text-center p-3 bg-[var(--card)] rounded-lg">
+                    <p className="text-lg font-bold text-[var(--foreground)]">{vaultInfo.depositedAmount}</p>
+                    <p className="text-[var(--accent)]">Deposited WLD</p>
+                  </article>
+                  <article className="text-center p-3 bg-[var(--card)] rounded-lg">
+                    <p className="text-lg font-bold text-[var(--foreground)]">{vaultInfo.currentValue}</p>
+                    <p className="text-[var(--accent)]">Current Value</p>
+                  </article>
+                  <article className="text-center p-3 bg-[var(--card)] rounded-lg">
+                    <p className={`text-lg font-bold ${vaultInfo.profit >= 0 ? 'text-[var(--success)]' : 'text-[var(--warning)]'}`}>
+                      {vaultInfo.profit.toFixed(2)}
+                    </p>
+                    <p className="text-[var(--accent)]">Profit/Loss</p>
+                  </article>
+                  <article className="text-center p-3 bg-[var(--card)] rounded-lg">
+                    <p className={`text-lg font-bold ${vaultInfo.profit >= 0 ? 'text-[var(--success)]' : 'text-[var(--warning)]'}`}>
+                      {vaultInfo.profitPercentage.toFixed(1)}%
+                    </p>
+                    <p className="text-[var(--accent)]">ROI</p>
+                  </article>
+                </section>
+                <p className="mt-3 text-xs text-[var(--accent)]">
+                  Last updated: {new Date(vaultInfo.lastUpdated).toLocaleString()}
+                </p>
+              </section>
             ) : (
-              <div className="py-6 text-center text-gray-500">
-                No vault information available. Please try again.
-              </div>
+              <section className="p-4 bg-[var(--agent-bg)] rounded-lg text-center">
+                <WarningTriangle className="w-8 h-8 text-[var(--warning)] mx-auto mb-2" />
+                <p className="text-[var(--accent)]">No deposit information found</p>
+              </section>
             )}
-          </div>
 
-          <AlertDialogFooter>
-            <div className="flex gap-3 pt-4 flex-shrink-0">
-              <Button
-                variant="tertiary"
-                onClick={() => setIsWithdrawDialogOpen(false)}
-                disabled={isWithdrawing}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
+            {/* Status Messages */}
+            {status !== 'idle' && (
+              <section className={`p-4 rounded-lg text-center ${status === 'success'
+                ? 'bg-[var(--success-light)] text-[var(--success)]'
+                : 'bg-[var(--error-light)] text-[var(--error)]'
+                }`}>
+                <p>{statusMessage}</p>
+              </section>
+            )}
 
+            {/* Withdrawal Warning */}
+            {vaultInfo && status === 'idle' && (
+              <section className="p-4 bg-[var(--warning-light)] border border-[var(--warning)] rounded-lg">
+                <article className="flex items-start gap-3">
+                  <WarningTriangle className="w-5 h-5 text-[var(--warning)] mt-0.5 flex-shrink-0" />
+                  <aside className="text-sm">
+                    <p className="font-semibold text-[var(--warning)] mb-1">Important Notice</p>
+                    <p className="text-[var(--accent)]">
+                      You are about to withdraw <strong>{vaultInfo.currentValue} WLD</strong> from your vault.
+                      This action cannot be undone and will close your current position.
+                    </p>
+                  </aside>
+                </article>
+              </section>
+            )}
+          </main>
+
+          <footer className="mt-6 flex gap-3">
+            {vaultInfo && status !== 'success' && (
               <Button
                 onClick={handleWithdraw}
                 disabled={isWithdrawing || !vaultInfo}
-                variant="primary"
-                className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
+                className="flex-1 py-3 bg-gradient-to-r from-[var(--primary)] to-[var(--primary-hover)] hover:from-[var(--primary-hover)] hover:to-[var(--primary)]"
               >
                 {isWithdrawing ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 rounded-full border-solid border-white border-t-transparent animate-spin"></div>
+                  <>
+                    <div className="inline-block w-4 h-4 border-2 rounded-full border-solid border-gray-200 border-t-white animate-spin mr-2" />
                     Processing...
-                  </div>
-                ) : vaultInfo ? (
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4" />
-                    Confirm Withdrawal
-                  </div>
+                  </>
                 ) : (
-                  'Loading...'
+                  `Withdraw ${vaultInfo.currentValue} WLD`
                 )}
               </Button>
-            </div>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
-}; 
+            )}
+          </footer>
+        </article>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+export default WithdrawButton

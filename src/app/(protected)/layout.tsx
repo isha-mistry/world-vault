@@ -18,9 +18,9 @@ export default async function TabsLayout({
   return (
     <Page>
       {children}
-      {/* <Page.Footer className="fixed bottom-0 left-0 right-0 z-20 bg-transparent">
+      <Page.Footer className="fixed bottom-0 left-0 right-0 z-20 bg-transparent">
         <Navigation />
-      </Page.Footer> */}
+      </Page.Footer>
     </Page>
   );
 }

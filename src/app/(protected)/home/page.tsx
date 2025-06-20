@@ -1,8 +1,8 @@
 import { auth } from '@/auth';
 import { Page } from '@/components/PageLayout';
 import { VaultDetails } from '@/components/VaultDetails';
-import { WithdrawButton } from '@/components/WithdrawButton';
 import { DepositComponent } from '@/components/DepositComponent';
+import WithdrawButton from '@/components/WithdrawButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CustomTopBar } from '@/components/CustomTopBar';
 import { Navigation } from '@/components/Navigation';
@@ -43,9 +43,6 @@ export default async function Home() {
           <DepositComponent />
         </div>
       </Page.Main>
-      <Page.Footer className="fixed bottom-0 left-0 right-0 z-20 bg-transparent">
-        <Navigation />
-      </Page.Footer>
     </>
   );
 }
