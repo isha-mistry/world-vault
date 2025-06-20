@@ -1,0 +1,222 @@
+@import "tailwindcss";
+
+/* Modern vibrant color palette for light and dark themes */
+[data-theme="light"] {
+  --background: #ffffff;
+  --foreground: #1f2937;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --primary-light: #dbeafe;
+  --secondary: #f3f4f6;
+  --secondary-hover: #e5e7eb;
+  --accent: #6b7280;
+  --accent-light: #f9fafb;
+  --border: #e5e7eb;
+  --card: #ffffff;
+  --card-hover: #f8fafc;
+  --success: #10b981;
+  --success-light: #d1fae5;
+  --warning: #f59e0b;
+  --warning-light: #fef3c7;
+  --error: #ef4444;
+  --error-hover: #dc2626;
+  --error-light: #fee2e2;
+  --agent-bg: #f8fafc;
+  --agent-border: #e2e8f0;
+  --agent-selected: #dbeafe;
+  --topbar-bg: #ffffff;
+  --topbar-border: #e5e7eb;
+  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+}
+
+[data-theme="dark"] {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --primary: #60a5fa;
+  --primary-hover: #3b82f6;
+  --primary-light: #1e3a8a;
+  --secondary: #1e293b;
+  --secondary-hover: #334155;
+  --accent: #94a3b8;
+  --accent-light: #1e293b;
+  --border: #334155;
+  --card: #1e293b;
+  --card-hover: #334155;
+  --success: #34d399;
+  --success-light: #064e3b;
+  --warning: #fbbf24;
+  --warning-light: #78350f;
+  --error: #f87171;
+  --error-hover: #ef4444;
+  --error-light: #7f1d1d;
+  --agent-bg: #334155;
+  --agent-border: #475569;
+  --agent-selected: #1e3a8a;
+  --topbar-bg: #1e293b;
+  --topbar-border: #334155;
+  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+  --color-card: var(--card);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Improved theme transition handling */
+:root {
+  --theme-transition-duration: 300ms;
+  --theme-transition-easing: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Default state - no transitions during initial load */
+* {
+  transition: none;
+}
+
+/* Enable smooth transitions only after theme is loaded and during theme switches */
+.theme-loaded * {
+  transition: background-color var(--theme-transition-duration)
+      var(--theme-transition-easing),
+    color var(--theme-transition-duration) var(--theme-transition-easing),
+    border-color var(--theme-transition-duration) var(--theme-transition-easing),
+    box-shadow var(--theme-transition-duration) var(--theme-transition-easing),
+    opacity var(--theme-transition-duration) var(--theme-transition-easing) !important;
+}
+
+/* Disable transitions during theme loading to prevent flash */
+.theme-loading *,
+.theme-loading *::before,
+.theme-loading *::after {
+  transition: none !important;
+}
+
+/* Special handling for components that should never have transitions */
+.transition-none,
+.transition-none * {
+  transition: none !important;
+}
+
+/* Buttons and interactive elements get smoother hover transitions */
+.theme-loaded button:not(.transition-none),
+.theme-loaded input:not(.transition-none),
+.theme-loaded textarea:not(.transition-none),
+.theme-loaded select:not(.transition-none) {
+  transition: background-color 200ms ease, color 200ms ease,
+    border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease !important;
+}
+
+/* Modal and Dialog z-index fixes */
+[data-radix-popper-content-wrapper] {
+  z-index: 50 !important;
+}
+
+[data-radix-portal] {
+  z-index: 50 !important;
+}
+
+/* Enhanced modal overlay styles */
+[data-radix-dialog-overlay] {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 49 !important;
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+[data-radix-dialog-content] {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 50 !important;
+}
+
+.radix-dialog-overlay {
+  z-index: 49 !important;
+  position: fixed !important;
+  inset: 0 !important;
+}
+
+.radix-dialog-content {
+  z-index: 50 !important;
+  position: fixed !important;
+}
+
+/* Ensure dialogs appear above everything */
+[role="dialog"] {
+  z-index: 50 !important;
+}
+
+[role="alertdialog"] {
+  z-index: 50 !important;
+}
+
+/* Fix for Radix UI modals */
+[data-state="open"][data-radix-portal] {
+  z-index: 50 !important;
+}
+
+/* Prevent input zoom on mobile */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="tel"],
+input[type="password"] {
+  font-size: 16px !important;
+}
+
+/* Mobile-specific enhancements */
+@media (max-width: 640px) {
+  /* Hide navigation when virtual keyboard is visible */
+  @supports (height: 100dvh) {
+    .keyboard-aware {
+      height: 100dvh;
+    }
+  }
+
+  /* Improved scrolling on mobile */
+  .mobile-scroll {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .mobile-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Prevent viewport jumping on input focus */
+  .input-focus-fix {
+    transition: none !important;
+  }
+}
+
+/* Animation delay utilities */
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
