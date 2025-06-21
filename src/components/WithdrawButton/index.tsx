@@ -240,8 +240,8 @@ export const WithdrawButton = () => {
   }
 
   return (
-    <div className="w-full max-w-md mx-auto px-2 sm:px-0 transition-none">
-      <AlertDialog open={isWithdrawDialogOpen} onOpenChange={setIsWithdrawDialogOpen}>
+    <div className="w-full mx-auto px-2 sm:px-0 transition-none">
+      <AlertDialog  open={isWithdrawDialogOpen} onOpenChange={setIsWithdrawDialogOpen}>
         <AlertDialogTrigger asChild>
           <button className="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 bg-gradient-to-r from-[var(--primary)] to-[var(--primary-hover)] text-white font-semibold shadow-[var(--shadow-md)] hover:shadow-[var(--shadow-lg)] transform hover:scale-105 transition-all duration-200 w-full">
             <ArrowLeft className="w-5 h-5" />
@@ -249,7 +249,7 @@ export const WithdrawButton = () => {
           </button>
         </AlertDialogTrigger>
 
-        <AlertDialogContent className="bg-[var(--card)] border-[var(--border)] rounded-t-4xl border-t-2 border-t-[var(--primary)] w-full max-w-md mx-auto">
+        <AlertDialogContent className="p-6 bg-[var(--card)] border-[var(--border)] rounded-t-4xl border-t-2 border-t-[var(--primary)] w-full mx-auto ">
           <article className="text-[var(--foreground)]">
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center justify-center gap-3 text-xl font-bold">
@@ -341,8 +341,8 @@ export const WithdrawButton = () => {
                     <div className="space-y-3 max-h-60 overflow-y-auto">
                       {deposits.map((deposit) => (
                         <div key={deposit.id} className="bg-[var(--card)] rounded-lg p-4 border border-[var(--border)]">
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex-1">
+                          <div className="flex flex-col items-start justify-between mb-3">
+                            <div className="flex-1 w-full pb-2">
                               <div className="flex items-center gap-2 mb-2">
                                 <span className="text-sm font-medium text-[var(--foreground)]">Deposit #{deposit.id}</span>
                                 <div className="flex items-center gap-1 text-xs text-[var(--accent)]">
@@ -376,7 +376,7 @@ export const WithdrawButton = () => {
                               disabled={isWithdrawing || deposit.withdrawableAmount === BigInt(0) || transactionId !== ''}
                               variant="primary"
                               size="sm"
-                              className="ml-3 bg-gradient-to-r from-[var(--primary)] to-[var(--primary-hover)] hover:from-[var(--primary-hover)] hover:to-[var(--primary)] text-white px-4 py-2 text-sm"
+                              className="bg-gradient-to-r from-[var(--primary)] to-[var(--primary-hover)] hover:from-[var(--primary-hover)] hover:to-[var(--primary)] text-white w-full px-4 py-2 text-sm"
                             >
                               {isWithdrawing && selectedDeposit?.id === deposit.id ? (
                                 <div className="flex items-center gap-2">

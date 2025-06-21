@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { Page } from '@/components/PageLayout';
-import { VaultDetails } from '@/components/VaultDetails';
 import { DepositComponent } from '@/components/DepositComponent';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { CustomTopBar } from '@/components/CustomTopBar';
@@ -57,6 +56,22 @@ function UserDisplay() {
   );
 }
 
+// Disclaimer Component
+function VaultDisclaimer() {
+  return (
+    <div className="w-full max-w-2xl mx-auto px-2 sm:px-0 mt-8">
+      <div className="p-4 sm:p-6 bg-gradient-to-r from-[var(--primary-light)] to-[var(--success-light)] rounded-lg border border-[var(--border)]">
+        <h4 className="font-semibold text-[var(--foreground)] mb-2 text-sm sm:text-base">About This Vault</h4>
+        <p className="text-xs sm:text-sm text-[var(--accent)] leading-relaxed">
+          This AI-managed vault uses advanced algorithms to optimize your Worldcoin investments.
+          Our Worldcoin Advisor agent continuously monitors market conditions and makes strategic
+          decisions to maximize your returns while minimizing risk.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   return (
     <>
@@ -81,9 +96,9 @@ export default function Home() {
         </div>
 
         <div className="relative z-10 flex flex-col items-center justify-start gap-6 sm:gap-8 mb-20 sm:mb-16 w-full pb-24 pt-4 sm:pt-8">
-          <VaultDetails />
-          <WithdrawButton />
           <DepositComponent />
+          <WithdrawButton />
+          <VaultDisclaimer />
         </div>
       </Page.Main>
     </>
